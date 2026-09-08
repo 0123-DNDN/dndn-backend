@@ -5,6 +5,8 @@ import com.team0123.dndn.ai.dto.ContextAnalyzeResponse;
 import com.team0123.dndn.ai.dto.GeminiContextResult;
 import com.team0123.dndn.ai.type.ContextRiskSignal;
 import org.springframework.stereotype.Service;
+import com.team0123.dndn.ai.dto.FollowUpQuestion;
+import com.team0123.dndn.ai.type.FollowUpQuestionCode;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -88,11 +90,23 @@ public class TransferContextService {
         boolean suspicious =
                 !validatedSignals.isEmpty();
 
+        /*
+         * 탐지된 위험 신호를 기준으로
+         * 사용자에게 필요한 추가 질문을 최대 3개 선택합니다.
+         */
+        List<FollowUpQuestion> followUpQuestions =
+                createFollowUpQuestions(validatedSignals);
+
+        boolean requiresFollowUp =
+                !followUpQuestions.isEmpty();
+
         return new ContextAnalyzeResponse(
                 suspicious,
                 List.copyOf(validatedSignals),
                 List.copyOf(validatedReasons),
-                true
+                true,
+                requiresFollowUp,
+                followUpQuestions
         );
     }
 
@@ -170,21 +184,180 @@ public class TransferContextService {
 
         return validatedReasons;
     }
+    /**
+     * 탐지된 위험 신호에 따라 추가 확인 질문을 선택합니다.
+     * 정상 Context에는 질문을 반환하지 않고,
+     * 이미 탐지된 위험 신호에 대한 질문은 제외합니다.
+     * 프론트에는 한 번에 최대 3개의 질문만 반환합니다.
+     */
+    private List<FollowUpQuestion> createFollowUpQuestions(
+            Set<ContextRiskSignal> detectedSignals
+    ) {
+        /*
+         * 위험 신호가 없다면 정상적인 송금 목적으로 판단하고
+         * 추가 질문을 제공하지 않습니다.
+         */
+        if (detectedSignals == null
+                || detectedSignals.isEmpty()) {
+            return List.of();
+        }
 
+        /*
+         * LinkedHashSet을 사용하면:
+         * 1. 같은 질문이 중복으로 추가되지 않고
+         * 2. 아래에 정의한 질문 순서를 유지할 수 있습니다.
+         */
+        Set<FollowUpQuestionCode> candidates =
+                new LinkedHashSet<>();
+
+        /*
+         * 기관 사칭 또는 제3자 송금 지시가 탐지된 경우입니다.
+         *
+         * 예:
+         * "김 검사가 보내래."
+         *
+         * 긴급성, 안전계좌, 비밀 유지 요구를 우선 확인합니다.
+         */
+        if (detectedSignals.contains(
+                ContextRiskSignal.AUTHORITY_IMPERSONATION
+        ) || detectedSignals.contains(
+                ContextRiskSignal.THIRD_PARTY_INSTRUCTION
+        )) {
+            candidates.add(FollowUpQuestionCode.URGENCY);
+            candidates.add(
+                    FollowUpQuestionCode.SAFE_ACCOUNT_REQUEST
+            );
+            candidates.add(
+                    FollowUpQuestionCode.SECRECY_REQUEST
+            );
+            candidates.add(
+                    FollowUpQuestionCode.CRIME_OR_ACCOUNT_THREAT
+            );
+        }
+
+        /*
+         * 송금 목적이 불명확한 경우에는
+         * 다른 사람의 지시인지부터 확인합니다.
+         */
+        if (detectedSignals.contains(
+                ContextRiskSignal.UNCLEAR_TRANSFER_PURPOSE
+        )) {
+            candidates.add(
+                    FollowUpQuestionCode.THIRD_PARTY_INSTRUCTION
+            );
+            candidates.add(FollowUpQuestionCode.URGENCY);
+            candidates.add(
+                    FollowUpQuestionCode.SAFE_ACCOUNT_REQUEST
+            );
+            candidates.add(
+                    FollowUpQuestionCode.SECRECY_REQUEST
+            );
+        }
+
+        /*
+         * 가족이나 지인 사칭이 의심되면
+         * 긴급성과 비밀 유지 요구를 확인합니다.
+         */
+        if (detectedSignals.contains(
+                ContextRiskSignal.FAMILY_IMPERSONATION
+        )) {
+            candidates.add(FollowUpQuestionCode.URGENCY);
+            candidates.add(
+                    FollowUpQuestionCode.SECRECY_REQUEST
+            );
+        }
+
+        /*
+         * 대출 선입금 요구가 탐지되면
+         * 제3자의 직접 지시와 긴급성을 확인합니다.
+         */
+        if (detectedSignals.contains(
+                ContextRiskSignal.LOAN_UPFRONT_PAYMENT
+        )) {
+            candidates.add(
+                    FollowUpQuestionCode.THIRD_PARTY_INSTRUCTION
+            );
+            candidates.add(FollowUpQuestionCode.URGENCY);
+        }
+
+        /*
+         * 원격제어 요구가 탐지되면
+         * 제3자의 송금 지시와 비밀 유지 요구를 확인합니다.
+         */
+        if (detectedSignals.contains(
+                ContextRiskSignal.REMOTE_CONTROL_REQUEST
+        )) {
+            candidates.add(
+                    FollowUpQuestionCode.THIRD_PARTY_INSTRUCTION
+            );
+            candidates.add(
+                    FollowUpQuestionCode.SECRECY_REQUEST
+            );
+        }
+
+        /*
+         * 긴급성이나 비밀 유지처럼 다른 위험 신호만 단독으로
+         * 탐지된 경우에도 관련 Context를 추가로 확인합니다.
+         */
+        if (candidates.isEmpty()) {
+            candidates.add(
+                    FollowUpQuestionCode.THIRD_PARTY_INSTRUCTION
+            );
+            candidates.add(
+                    FollowUpQuestionCode.SAFE_ACCOUNT_REQUEST
+            );
+            candidates.add(
+                    FollowUpQuestionCode.SECRECY_REQUEST
+            );
+            candidates.add(
+                    FollowUpQuestionCode.CRIME_OR_ACCOUNT_THREAT
+            );
+        }
+
+        return candidates.stream()
+
+                /*
+                 * 최초 문장에서 이미 탐지된 신호는
+                 * 사용자에게 다시 질문하지 않습니다.
+                 */
+                .filter(code ->
+                        !detectedSignals.contains(
+                                code.riskSignal()
+                        )
+                )
+
+                // 한 번에 최대 3개만 프론트에 반환합니다.
+                .limit(3)
+
+                // 질문 코드를 프론트 응답 DTO로 변환합니다.
+                .map(FollowUpQuestion::from)
+
+                // 수정할 수 없는 List로 반환합니다.
+                .toList();
+    }
     /**
      * 사용자가 송금 목적을 입력하지 않은 경우의 결과입니다.
-     * 외부 AI 호출 없이 서버 규칙만으로 판단합니다.
+     * 외부 AI를 호출하지 않고 목적 불명확 신호와
+     * 추가 확인 질문을 반환합니다.
      */
     private ContextAnalyzeResponse unclearPurpose() {
+        Set<ContextRiskSignal> signals =
+                Set.of(
+                        ContextRiskSignal.UNCLEAR_TRANSFER_PURPOSE
+                );
+
+        List<FollowUpQuestion> followUpQuestions =
+                createFollowUpQuestions(signals);
+
         return new ContextAnalyzeResponse(
                 true,
-                List.of(
-                        ContextRiskSignal.UNCLEAR_TRANSFER_PURPOSE
-                ),
+                List.copyOf(signals),
                 List.of(
                         "송금 목적이 명확하지 않아요."
                 ),
-                true
+                true,
+                !followUpQuestions.isEmpty(),
+                followUpQuestions
         );
     }
 }

@@ -12,6 +12,7 @@ import com.team0123.dndn.fds.type.RecommendedAction;
 import com.team0123.dndn.fds.type.RiskInputType;
 import com.team0123.dndn.fds.type.RiskLevel;
 import org.springframework.stereotype.Service;
+import com.team0123.dndn.ai.dto.FollowUpAnswer;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -52,6 +53,15 @@ public class FdsAnalyzeService {
         // 사용자가 말한 송금 목적에서 위험 Context를 탐지합니다.
         ContextAnalyzeResponse contextResult =
                 transferContextService.analyze(request.purposeText());
+        /*
+         * Gemini가 최초 문장에서 탐지한 위험 신호와
+         * 사용자가 추가 질문에 '예'라고 답한 신호를 합칩니다.
+         */
+        List<ContextRiskSignal> mergedContextSignals =
+                mergeContextSignals(
+                        contextResult.detectedSignals(),
+                        request.followUpAnswers()
+                );
 
         // Context 분석 결과와 A/C가 전달한 정보를 점수 계산 입력으로 합칩니다.
         FdsRiskScoreRequest scoreRequest =
@@ -61,7 +71,7 @@ public class FdsAnalyzeService {
                         request.velocity(),
                         request.device(),
                         request.behavior(),
-                        contextResult.detectedSignals(),
+                        mergedContextSignals,
                         request.condition()
                 );
 
@@ -90,7 +100,7 @@ public class FdsAnalyzeService {
         List<RuleMatch> combinationMatches =
                 findCombinationRules(
                         request,
-                        contextResult.detectedSignals()
+                        mergedContextSignals
                 );
 
         for (RuleMatch match : combinationMatches) {
@@ -118,6 +128,71 @@ public class FdsAnalyzeService {
         );
     }
 
+    /**
+     * 최초 Gemini 분석 신호와 추가 질문 답변을 합칩니다.
+     * 사용자가 '예'라고 답한 질문만 위험 신호로 추가하고,
+     * '아니요' 또는 null 답변은 추가하지 않습니다.
+     */
+    private List<ContextRiskSignal> mergeContextSignals(
+            List<ContextRiskSignal> detectedSignals,
+            List<FollowUpAnswer> followUpAnswers
+    ) {
+        /*
+         * EnumSet을 사용하면 같은 위험 신호가 여러 번 들어와도
+         * 하나만 유지됩니다.
+         */
+        Set<ContextRiskSignal> mergedSignals =
+                EnumSet.noneOf(ContextRiskSignal.class);
+
+        /*
+         * Gemini가 최초 문장에서 탐지한 위험 신호를 먼저 추가합니다.
+         */
+        if (detectedSignals != null) {
+            for (ContextRiskSignal signal : detectedSignals) {
+                if (signal != null) {
+                    mergedSignals.add(signal);
+                }
+            }
+        }
+
+        /*
+         * 프론트에서 전달한 추가 질문 답변을 확인합니다.
+         */
+        if (followUpAnswers != null) {
+            for (FollowUpAnswer followUpAnswer : followUpAnswers) {
+                // 배열 안에 null이 들어온 경우는 무시합니다.
+                if (followUpAnswer == null) {
+                    continue;
+                }
+
+                /*
+                 * 질문 코드가 없거나 '아니요' 답변이면
+                 * 위험 신호에 추가하지 않습니다.
+                 */
+                if (followUpAnswer.code() == null
+                        || !followUpAnswer.answeredYes()) {
+                    continue;
+                }
+
+                /*
+                 * 질문 코드에 연결된 ContextRiskSignal을 추가합니다.
+                 *
+                 * 예:
+                 * SAFE_ACCOUNT_REQUEST = true
+                 * → ContextRiskSignal.SAFE_ACCOUNT_REQUEST 추가
+                 */
+                mergedSignals.add(
+                        followUpAnswer.code().riskSignal()
+                );
+            }
+        }
+
+        /*
+         * 수정할 수 없는 List로 변환해서 반환합니다.
+         * EnumSet의 enum 순서로 정렬되므로 결과도 일정합니다.
+         */
+        return List.copyOf(mergedSignals);
+    }
     private boolean isConfirmedFraudAccount(
             FdsRiskScoreRequest.RecipientRiskInput recipient
     ) {

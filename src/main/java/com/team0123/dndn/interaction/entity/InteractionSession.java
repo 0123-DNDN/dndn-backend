@@ -40,6 +40,19 @@ public class InteractionSession {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    public boolean isActive() {
+        return this.endedAt == null;
+    }
+
+    public void end() {
+        if (this.endedAt != null) {
+            return;
+        }
+
+        this.endedAt = LocalDateTime.now();
+    }
+
+
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();

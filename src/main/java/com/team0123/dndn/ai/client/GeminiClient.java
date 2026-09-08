@@ -18,7 +18,7 @@ import java.util.Optional;
  * 1. Gemini에 사용자 발화 전달
  * 2. Gemini 응답에서 JSON 문자열 추출
  * 3. JSON을 GeminiIntentResult로 변환
- * 이 클래스에서는 DB 조회나 송금 처리를 수행하지 않습니다.
+ * 이 클래스에서는 DB  조회나 송금 처리를 수행하지 않습니다.
  */
 @Component
 public class GeminiClient {

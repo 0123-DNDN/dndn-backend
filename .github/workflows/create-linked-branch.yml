@@ -1,0 +1,169 @@
+name: Create linked branch
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  create-branch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Parse issue form
+        id: parse
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+
+            function readSection(label) {
+              const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const regex = new RegExp(`### ${escaped}\\s*\\n+([^\\n]+)`, 'm');
+              const match = body.match(regex);
+              return match ? match[1].trim() : '';
+            }
+
+            const type = readSection('작업 유형');
+            let name = readSection('브랜치명');
+
+            const allowedTypes = ['feature', 'fix', 'refactor', 'chore', 'docs', 'test'];
+            if (!allowedTypes.includes(type)) {
+              core.setFailed(`지원하지 않는 작업 유형입니다: ${type}`);
+              return;
+            }
+
+            name = name
+              .toLowerCase()
+              .replace(/[^a-z0-9-]/g, '-')
+              .replace(/-+/g, '-')
+              .replace(/^-|-$/g, '');
+
+            if (!name) {
+              core.setFailed('유효한 브랜치명을 찾지 못했습니다.');
+              return;
+            }
+
+            const branch = `${type}/${context.issue.number}-${name}`;
+            core.setOutput('branch', branch);
+            core.setOutput('type', type);
+
+      - name: Create branch from develop or default branch
+        id: branch
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ steps.parse.outputs.branch }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH_NAME;
+
+            const repoInfo = await github.rest.repos.get({ owner, repo });
+            let base = 'develop';
+
+            try {
+              await github.rest.repos.getBranch({ owner, repo, branch: base });
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              base = repoInfo.data.default_branch;
+            }
+
+            const baseRef = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${base}`
+            });
+
+            try {
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/heads/${branch}`,
+                sha: baseRef.data.object.sha
+              });
+            } catch (e) {
+              if (e.status !== 422) throw e;
+              core.info(`Branch already exists: ${branch}`);
+            }
+
+            core.setOutput('base', base);
+
+      - name: Link branch to issue
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ steps.parse.outputs.branch }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = process.env.BRANCH_NAME;
+            const issueNodeId = context.payload.issue.node_id;
+            const repoNodeId = context.payload.repository.node_id;
+
+            const mutation = `
+              mutation($issueId: ID!, $repositoryId: ID!, $name: String!) {
+                createLinkedBranch(input: {
+                  issueId: $issueId,
+                  repositoryId: $repositoryId,
+                  name: $name
+                }) {
+                  linkedBranch { ref { name } }
+                }
+              }
+            `;
+
+            try {
+              await github.graphql(mutation, {
+                issueId: issueNodeId,
+                repositoryId: repoNodeId,
+                name: branch
+              });
+            } catch (e) {
+              core.warning(`Linked Branch 연결은 건너뜁니다: ${e.message}`);
+            }
+
+      - name: Apply type label
+        uses: actions/github-script@v7
+        env:
+          TYPE: ${{ steps.parse.outputs.type }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const map = {
+              feature: '✨ Feature',
+              fix: '🐞 BugFix',
+              refactor: '🔨 Refactor',
+              chore: '⚙ Setting',
+              docs: '📃 Docs',
+              test: '✅ Test'
+            };
+
+            const label = map[process.env.TYPE];
+            if (!label) return;
+
+            try {
+              await github.rest.issues.addLabels({
+                ...context.repo,
+                issue_number: context.issue.number,
+                labels: [label]
+              });
+            } catch (e) {
+              core.warning(`Label '${label}'을 먼저 저장소에 생성해주세요: ${e.message}`);
+            }
+
+      - name: Comment branch info
+        uses: actions/github-script@v7
+        env:
+          BRANCH_NAME: ${{ steps.parse.outputs.branch }}
+          BASE_BRANCH: ${{ steps.branch.outputs.base }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: `🌿 작업 브랜치가 생성되었습니다.\n\n\`${process.env.BRANCH_NAME}\`\n\nBase: \`${process.env.BASE_BRANCH}\``
+            });

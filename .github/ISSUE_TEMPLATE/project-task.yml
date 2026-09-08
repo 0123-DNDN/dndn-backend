@@ -1,0 +1,46 @@
+name: DNDN Issue
+description: 작업 이슈를 생성합니다.
+title: "[Feature] "
+body:
+  - type: dropdown
+    id: branch_type
+    attributes:
+      label: 작업 유형
+      options:
+        - feature
+        - fix
+        - refactor
+        - chore
+        - docs
+        - test
+    validations:
+      required: true
+
+  - type: input
+    id: branch_name
+    attributes:
+      label: 브랜치명
+      description: 영문 kebab-case로 짧게 작성해주세요. Issue 번호는 자동으로 붙습니다.
+      placeholder: transfer-create
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 작업 내용
+      placeholder: |
+        - 송금 요청 생성 API 구현
+        - 요청값 검증
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 완료 조건
+      placeholder: |
+        - [ ] 송금 요청 생성 성공
+        - [ ] 잘못된 금액 입력 예외 처리
+    validations:
+      required: true

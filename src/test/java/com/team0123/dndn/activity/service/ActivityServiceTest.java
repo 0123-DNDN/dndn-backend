@@ -187,6 +187,71 @@ class ActivityServiceTest {
     }
 
     @Test
+    void walkingKeepsLargestStepCountAndCompletedStatus() {
+        mockSenior(1L);
+        Activity walking = activity(3L, ActivityType.WALKING, 3, 3000, true);
+        when(activityRepository.findById(3L)).thenReturn(Optional.of(walking));
+
+        ActivityResult existing = ActivityResult.builder()
+                .activityResultId(30L)
+                .activityId(3L)
+                .seniorUserId(1L)
+                .activityDate(LocalDate.now(SEOUL_ZONE))
+                .status(ActivityStatus.IN_PROGRESS)
+                .stepCount(2200)
+                .build();
+        when(activityResultRepository
+                .findBySeniorUserIdAndActivityIdAndActivityDate(anyLong(), anyLong(), any()))
+                .thenReturn(Optional.of(existing));
+        when(activityResultRepository.save(existing)).thenReturn(existing);
+
+        ActivityResultResponse decreased = activityService.saveResult(
+                1L,
+                3L,
+                new ActivityResultSaveRequest(null, 1800, null, null)
+        );
+        ActivityResultResponse completed = activityService.saveResult(
+                1L,
+                3L,
+                new ActivityResultSaveRequest(null, 3000, null, null)
+        );
+        var completedAt = existing.getCompletedAt();
+        ActivityResultResponse afterCompletion = activityService.saveResult(
+                1L,
+                3L,
+                new ActivityResultSaveRequest(null, 2500, null, null)
+        );
+
+        assertEquals(2200, decreased.stepCount());
+        assertEquals("IN_PROGRESS", decreased.status());
+        assertEquals(3000, completed.stepCount());
+        assertEquals("COMPLETED", completed.status());
+        assertNotNull(completedAt);
+        assertEquals(3000, afterCompletion.stepCount());
+        assertEquals("COMPLETED", afterCompletion.status());
+        assertEquals(completedAt, existing.getCompletedAt());
+        verify(activityResultRepository, times(3)).save(existing);
+    }
+
+    @Test
+    void walkingRejectsMissingStepCount() {
+        mockSenior(1L);
+        when(activityRepository.findById(3L)).thenReturn(Optional.of(
+                activity(3L, ActivityType.WALKING, 3, 3000, true)
+        ));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> activityService.saveResult(
+                        1L,
+                        3L,
+                        new ActivityResultSaveRequest(null, null, null, null)
+                )
+        );
+        verify(activityResultRepository, never()).save(any());
+    }
+
+    @Test
     void voiceTalkConnectsOwnedSession() {
         mockSenior(1L);
         Activity voice = activity(2L, ActivityType.VOICE_TALK, 2, null, true);

@@ -6,6 +6,7 @@ import com.team0123.dndn.activity.dto.TodayActivityResponse;
 import com.team0123.dndn.activity.entity.Activity;
 import com.team0123.dndn.activity.entity.ActivityResult;
 import com.team0123.dndn.activity.entity.ActivityStatus;
+import com.team0123.dndn.activity.entity.ActivityType;
 import com.team0123.dndn.activity.repository.ActivityRepository;
 import com.team0123.dndn.activity.repository.ActivityResultRepository;
 import com.team0123.dndn.interaction.entity.InteractionSession;
@@ -93,11 +94,16 @@ public class ActivityService {
                         today
                 )
                 .map(existing -> {
+                    ValidatedResultValues updateValues = mergeWithExisting(
+                            activity,
+                            existing,
+                            values
+                    );
                     existing.update(
-                            values.status(),
-                            values.score(),
-                            values.stepCount(),
-                            values.sessionId(),
+                            updateValues.status(),
+                            updateValues.score(),
+                            updateValues.stepCount(),
+                            updateValues.sessionId(),
                             now
                     );
                     return existing;
@@ -115,6 +121,32 @@ public class ActivityService {
 
         ActivityResult savedResult = activityResultRepository.save(result);
         return ActivityResultResponse.from(savedResult, activity.getActivityType());
+    }
+
+    private ValidatedResultValues mergeWithExisting(
+            Activity activity,
+            ActivityResult existing,
+            ValidatedResultValues requested
+    ) {
+        if (activity.getActivityType() != ActivityType.WALKING) {
+            return requested;
+        }
+
+        int latestStepCount = existing.getStepCount() == null
+                ? requested.stepCount()
+                : Math.max(existing.getStepCount(), requested.stepCount());
+        boolean completed = existing.getStatus() == ActivityStatus.COMPLETED
+                || activity.getTargetValue() != null
+                && latestStepCount >= activity.getTargetValue();
+
+        return new ValidatedResultValues(
+                completed
+                        ? ActivityStatus.COMPLETED
+                        : ActivityStatus.IN_PROGRESS,
+                null,
+                latestStepCount,
+                null
+        );
     }
 
     private User requireSenior(Long userId) {

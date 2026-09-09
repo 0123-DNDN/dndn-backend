@@ -13,6 +13,8 @@ import com.team0123.dndn.family.entity.GuardianRelationship;
 import com.team0123.dndn.family.entity.GuardianRelationshipStatus;
 import com.team0123.dndn.family.repository.FamilyPostRepository;
 import com.team0123.dndn.family.repository.GuardianRelationshipRepository;
+import com.team0123.dndn.notification.entity.NotificationType;
+import com.team0123.dndn.notification.service.NotificationService;
 import com.team0123.dndn.user.entity.Role;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
@@ -42,6 +44,7 @@ public class FamilyPostService {
     private final ActivityResultRepository activityResultRepository;
     private final UserRepository userRepository;
     private final FamilyImageStorage familyImageStorage;
+    private final NotificationService notificationService;
 
     @Transactional
     public FamilyPostResponse create(
@@ -76,9 +79,17 @@ public class FamilyPostService {
                     .message(request.message())
                     .build();
 
-            return FamilyPostResponse.from(
-                    familyPostRepository.saveAndFlush(familyPost)
+            FamilyPost savedPost =
+                    familyPostRepository.saveAndFlush(familyPost);
+
+            notificationService.createNotification(
+                    relationship.getSeniorUserId(),
+                    NotificationType.FAMILY_POST_RECEIVED,
+                    "새로운 가족 소식이 도착했습니다.",
+                    "가족이 새로운 소식을 보냈습니다."
             );
+
+            return FamilyPostResponse.from(savedPost);
         } catch (RuntimeException exception) {
             familyImageStorage.deleteIfExists(imageUrl);
             throw exception;

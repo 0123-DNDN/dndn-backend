@@ -97,4 +97,19 @@ public class UserService {
 
         return UserResponse.from(user);
     }
+
+    @Transactional
+    public void updateExpoPushToken(
+            Long userId,
+            String expoPushToken
+    ) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "사용자를 찾을 수 없습니다."
+                        )
+                );
+
+        user.updateExpoPushToken(expoPushToken);
+    }
 }

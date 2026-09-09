@@ -19,6 +19,7 @@ import com.team0123.dndn.fds.type.RecommendedAction;
 import com.team0123.dndn.recipient.entity.RecipientAlias;
 import com.team0123.dndn.recipient.repository.RecipientAliasRepository;
 import com.team0123.dndn.transfer.dto.FdsCheckResponse;
+import com.team0123.dndn.transfer.dto.FdsCheckRequest;
 import com.team0123.dndn.transfer.dto.FdsResultResponse;
 import com.team0123.dndn.transfer.dto.TransferCreateRequest;
 import com.team0123.dndn.transfer.dto.TransferResponse;
@@ -347,7 +348,8 @@ public class TransferService {
      */
     public FdsCheckResponse startFdsCheck(
             Long userId,
-            Long transactionId
+            Long transactionId,
+            FdsCheckRequest fdsCheckRequest
     ) {
 
         Transfer transfer =
@@ -365,11 +367,14 @@ public class TransferService {
 
         // FDS 분석 요청 데이터를 생성합니다.
         FdsAnalyzeRequest request =
-                buildFdsAnalyzeRequest(transfer);
+                buildFdsAnalyzeRequest(transfer, fdsCheckRequest);
 
         // B의 FDS 분석 서비스를 호출합니다.
         FdsAnalyzeResponse response =
-                fdsAnalyzeService.analyze(request);
+                fdsAnalyzeService.analyze(
+                        request,
+                        fdsCheckRequest.detectedSignals()
+                );
 
         // FDS 분석 결과를 DB에 저장합니다.
         saveFdsAnalysis(
@@ -395,7 +400,8 @@ public class TransferService {
      * FDS 분석 요청 DTO를 생성합니다.
      */
     private FdsAnalyzeRequest buildFdsAnalyzeRequest(
-            Transfer transfer
+            Transfer transfer,
+            FdsCheckRequest fdsCheckRequest
     ) {
 
         // 송금 계좌의 현재 잔액을 조회합니다.
@@ -534,6 +540,7 @@ public class TransferService {
          */
         return new FdsAnalyzeRequest(
                 transfer.getPurpose(),
+                fdsCheckRequest.followUpAnswers(),
 
                 new TransactionRiskInput(
                         amountRatioToAverage,

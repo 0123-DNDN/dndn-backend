@@ -44,6 +44,13 @@ public class FdsAnalyzeService {
      * 전달받은 모든 위험 정보를 이용하여 최종 위험도를 판단합니다.
      */
     public FdsAnalyzeResponse analyze(FdsAnalyzeRequest request) {
+        return analyze(request, List.of());
+    }
+
+    public FdsAnalyzeResponse analyze(
+            FdsAnalyzeRequest request,
+            List<ContextRiskSignal> previouslyDetectedSignals
+    ) {
         if (request == null) {
             throw new IllegalArgumentException(
                     "FDS 분석 요청은 null일 수 없습니다."
@@ -60,6 +67,7 @@ public class FdsAnalyzeService {
         List<ContextRiskSignal> mergedContextSignals =
                 mergeContextSignals(
                         contextResult.detectedSignals(),
+                        previouslyDetectedSignals,
                         request.followUpAnswers()
                 );
 
@@ -135,6 +143,7 @@ public class FdsAnalyzeService {
      */
     private List<ContextRiskSignal> mergeContextSignals(
             List<ContextRiskSignal> detectedSignals,
+            List<ContextRiskSignal> previouslyDetectedSignals,
             List<FollowUpAnswer> followUpAnswers
     ) {
         /*
@@ -149,6 +158,14 @@ public class FdsAnalyzeService {
          */
         if (detectedSignals != null) {
             for (ContextRiskSignal signal : detectedSignals) {
+                if (signal != null) {
+                    mergedSignals.add(signal);
+                }
+            }
+        }
+
+        if (previouslyDetectedSignals != null) {
+            for (ContextRiskSignal signal : previouslyDetectedSignals) {
                 if (signal != null) {
                     mergedSignals.add(signal);
                 }

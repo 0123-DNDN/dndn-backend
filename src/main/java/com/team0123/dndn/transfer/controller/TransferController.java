@@ -1,6 +1,7 @@
 package com.team0123.dndn.transfer.controller;
 
 import com.team0123.dndn.transfer.dto.FdsCheckResponse;
+import com.team0123.dndn.transfer.dto.FdsCheckRequest;
 import com.team0123.dndn.transfer.dto.TransferCreateRequest;
 import com.team0123.dndn.transfer.dto.TransferResponse;
 import com.team0123.dndn.transfer.service.TransferService;
@@ -123,13 +124,15 @@ public class TransferController {
     @PostMapping("/{transactionId}/fds-check")
     public ResponseEntity<FdsCheckResponse> startFdsCheck(
             @AuthenticationPrincipal Long userId,
-            @PathVariable Long transactionId
+            @PathVariable Long transactionId,
+            @Valid @RequestBody(required = false) FdsCheckRequest request
     ) {
 
         FdsCheckResponse response =
                 transferService.startFdsCheck(
                         userId,
-                        transactionId
+                        transactionId,
+                        request == null ? FdsCheckRequest.empty() : request
                 );
 
         return ResponseEntity.ok(response);

@@ -4,6 +4,7 @@ import com.team0123.dndn.activity.entity.ActivityResult;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,5 +19,16 @@ public interface ActivityResultRepository extends JpaRepository<ActivityResult, 
     List<ActivityResult> findAllBySeniorUserIdAndActivityDate(
             Long seniorUserId,
             LocalDate activityDate
+    );
+
+    List<ActivityResult> findAllBySeniorUserIdAndActivityDateBetween(
+            Long seniorUserId,
+            LocalDate startDate,
+            LocalDate endDate
+    );
+
+    List<ActivityResult> findAllBySeniorUserIdAndSessionIdIn(
+            Long seniorUserId,
+            Collection<Long> sessionIds
     );
 }

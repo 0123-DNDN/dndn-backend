@@ -6,6 +6,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -54,6 +55,22 @@ public class GlobalExceptionHandler {
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
+                .body(response);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatusException(
+            ResponseStatusException e
+    ) {
+        ErrorResponse response = ErrorResponse.builder()
+                .status(e.getStatusCode().value())
+                .message(e.getReason() == null
+                        ? "요청을 처리할 수 없습니다."
+                        : e.getReason())
+                .build();
+
+        return ResponseEntity
+                .status(e.getStatusCode())
                 .body(response);
     }
 }

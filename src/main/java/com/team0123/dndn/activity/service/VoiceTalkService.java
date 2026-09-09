@@ -10,6 +10,7 @@ import com.team0123.dndn.activity.entity.ActivityType;
 import com.team0123.dndn.activity.repository.ActivityRepository;
 import com.team0123.dndn.activity.support.VoiceTalkOpeningQuestions;
 import com.team0123.dndn.ai.client.GeminiDailyTalkClient;
+import com.team0123.dndn.ai.dto.AiVoiceConditionRequest;
 import com.team0123.dndn.interaction.entity.InputType;
 import com.team0123.dndn.interaction.entity.InteractionMessage;
 import com.team0123.dndn.interaction.entity.InteractionSession;
@@ -19,6 +20,8 @@ import com.team0123.dndn.interaction.repository.InteractionSessionRepository;
 import com.team0123.dndn.user.entity.Role;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
+import com.team0123.dndn.voice.entity.VoiceConditionRecord;
+import com.team0123.dndn.voice.repository.VoiceConditionRecordRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,7 @@ public class VoiceTalkService {
 
     private final InteractionSessionRepository interactionSessionRepository;
     private final InteractionMessageRepository interactionMessageRepository;
+    private final VoiceConditionRecordRepository voiceConditionRecordRepository;
     private final UserRepository userRepository;
     private final ActivityRepository activityRepository;
     private final ActivityService activityService;
@@ -81,7 +85,7 @@ public class VoiceTalkService {
             throw new IllegalArgumentException("이미 완료된 오늘 이야기 세션입니다.");
         }
 
-        interactionMessageRepository.save(
+        InteractionMessage answerMessage = interactionMessageRepository.save(
                 InteractionMessage.builder()
                         .sessionId(sessionId)
                         .senderType(SenderType.USER)
@@ -89,6 +93,7 @@ public class VoiceTalkService {
                         .content(request.text().trim())
                         .build()
         );
+        saveVoiceCondition(answerMessage.getMessageId(), request.voiceCondition());
 
         List<InteractionMessage> context = interactionMessageRepository
                 .findAllBySessionIdOrderByCreatedAtAscMessageIdAsc(sessionId);
@@ -147,6 +152,25 @@ public class VoiceTalkService {
                 null,
                 answeredCount,
                 false
+        );
+    }
+
+    private void saveVoiceCondition(
+            Long messageId,
+            AiVoiceConditionRequest request
+    ) {
+        if (request == null) {
+            return;
+        }
+
+        voiceConditionRecordRepository.save(
+                VoiceConditionRecord.builder()
+                        .messageId(messageId)
+                        .speechDurationMs(request.speechDurationMs())
+                        .speechRate(request.speechRate())
+                        .avgPauseDurationMs(request.avgPauseDurationMs())
+                        .longPauseCount(request.normalizedLongPauseCount())
+                        .build()
         );
     }
 

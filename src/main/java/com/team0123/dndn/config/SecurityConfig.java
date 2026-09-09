@@ -44,7 +44,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/api/auth/signup",
-                                "/api/auth/login"
+                                "/api/auth/login",
+                                "/api/auth/phone/send-code",
+                                "/api/auth/phone/verify",
+                                "/uploads/family/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

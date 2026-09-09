@@ -14,6 +14,8 @@ public class TransactionResponse {
 
     private Long transactionId;
 
+    private String senderAccountNumber;
+
     private String receiverBankCode;
     private String receiverAccountNumber;
     private String receiverName;
@@ -28,10 +30,12 @@ public class TransactionResponse {
 
     public static TransactionResponse from(
             Transfer transfer,
+            String senderAccountNumber,
             RiskLevel riskLevel
     ) {
         return TransactionResponse.builder()
                 .transactionId(transfer.getTransactionId())
+                .senderAccountNumber(senderAccountNumber)
                 .receiverBankCode(transfer.getReceiverBankCode())
                 .receiverAccountNumber(transfer.getReceiverAccountNumber())
                 .receiverName(transfer.getReceiverName())

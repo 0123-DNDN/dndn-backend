@@ -12,6 +12,9 @@ import com.team0123.dndn.activity.repository.ActivityResultRepository;
 import com.team0123.dndn.interaction.entity.InteractionSession;
 import com.team0123.dndn.interaction.repository.InteractionSessionRepository;
 import com.team0123.dndn.user.entity.Role;
+import com.team0123.dndn.family.repository.GuardianRelationshipRepository;
+import com.team0123.dndn.family.entity.GuardianRelationship;
+import com.team0123.dndn.family.entity.GuardianRelationshipStatus;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,14 +63,57 @@ class ActivityServiceTest {
 
     private ActivityService activityService;
 
+    @Mock
+    private GuardianRelationshipRepository guardianRelationshipRepository;
+
     @BeforeEach
     void setUp() {
         activityService = new ActivityService(
                 activityRepository,
                 activityResultRepository,
                 userRepository,
-                interactionSessionRepository
+                interactionSessionRepository,
+                guardianRelationshipRepository
         );
+    }
+
+    @Test
+    void guardianReadsOnlyLinkedSeniorActivities() {
+        when(userRepository.findById(2L)).thenReturn(Optional.of(
+                User.builder().userId(2L).role(Role.GUARDIAN).build()));
+        mockSenior(1L);
+        when(guardianRelationshipRepository.findByGuardianUserIdAndStatus(
+                2L, GuardianRelationshipStatus.ACTIVE)).thenReturn(Optional.of(
+                GuardianRelationship.builder().guardianUserId(2L).seniorUserId(1L).build()));
+        when(activityRepository.findAllByIsActiveTrueOrderByDisplayOrderAsc())
+                .thenReturn(List.of(activity(3L, ActivityType.WALKING, 3, 3000, true)));
+        when(activityResultRepository.findAllBySeniorUserIdAndActivityDate(1L, LocalDate.now(SEOUL_ZONE)))
+                .thenReturn(List.of(ActivityResult.builder().activityId(3L)
+                        .status(ActivityStatus.IN_PROGRESS).stepCount(1234).build()));
+
+        var response = activityService.getGuardianTodayActivities(2L);
+
+        assertEquals(1234, response.get(0).stepCount());
+        assertFalse(response.get(0).completed());
+        verify(activityResultRepository, never()).findAllBySeniorUserIdAndActivityDate(
+                org.mockito.ArgumentMatchers.eq(2L), any());
+    }
+
+    @Test
+    void guardianWithoutActiveFamilyCannotReadActivities() {
+        when(userRepository.findById(2L)).thenReturn(Optional.of(
+                User.builder().userId(2L).role(Role.GUARDIAN).build()));
+        when(guardianRelationshipRepository.findByGuardianUserIdAndStatus(
+                2L, GuardianRelationshipStatus.ACTIVE)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> activityService.getGuardianTodayActivities(2L));
+        verify(activityResultRepository, never()).findAllBySeniorUserIdAndActivityDate(anyLong(), any());
+    }
+
+    @Test
+    void seniorCannotUseGuardianActivityLookup() {
+        mockSenior(1L);
+        assertThrows(IllegalArgumentException.class, () -> activityService.getGuardianTodayActivities(1L));
+        verify(activityResultRepository, never()).findAllBySeniorUserIdAndActivityDate(anyLong(), any());
     }
 
     @Test

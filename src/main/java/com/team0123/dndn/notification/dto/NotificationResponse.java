@@ -15,6 +15,7 @@ public class NotificationResponse {
     private NotificationType type;
     private String title;
     private String content;
+    private Long relatedTransactionId;
     private Boolean isRead;
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
@@ -27,6 +28,7 @@ public class NotificationResponse {
                 .type(notification.getType())
                 .title(notification.getTitle())
                 .content(notification.getContent())
+                .relatedTransactionId(notification.getRelatedTransactionId())
                 .isRead(notification.getIsRead())
                 .createdAt(notification.getCreatedAt())
                 .readAt(notification.getReadAt())

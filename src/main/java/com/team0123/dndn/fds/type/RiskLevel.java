@@ -5,16 +5,16 @@ package com.team0123.dndn.fds.type;
  */
 public enum RiskLevel {
 
-    // 0~24점: 정상
+    // 0~14점: 정상
     LOW(0),
 
-    // 25~44점: 주의
+    // 15~24점: 경고
     CAUTION(1),
 
-    // 45~69점: 위험
+    // 25~34점: 위험
     HIGH(2),
 
-    // 70점 이상 또는 Hard Rule: 고위험
+    // 35점 이상 또는 Hard Rule: 고위험
     CRITICAL(3);
 
     private final int priority;
@@ -27,15 +27,15 @@ public enum RiskLevel {
      * 기본 점수를 위험 등급으로 변환합니다.
      */
     public static RiskLevel fromScore(int score) {
-        if (score >= 70) {
+        if (score >= 35) {
             return CRITICAL;
         }
 
-        if (score >= 45) {
+        if (score >= 25) {
             return HIGH;
         }
 
-        if (score >= 25) {
+        if (score >= 15) {
             return CAUTION;
         }
 

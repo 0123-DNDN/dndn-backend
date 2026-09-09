@@ -254,6 +254,14 @@ public class FdsAnalyzeService {
 
         addMatch(
                 matches,
+                isUrgentFamilyAccidentSettlement(request.purposeText()),
+                FdsDecisionRule.FAMILY_ACCIDENT_URGENT_SETTLEMENT,
+                RiskLevel.HIGH,
+                "가족의 교통사고를 이유로 합의금을 급히 보내려는 상황이에요. 송금 전에 가족과 직접 확인해 주세요."
+        );
+
+        addMatch(
+                matches,
                 hasAll(signals,
                         ContextRiskSignal.AUTHORITY_IMPERSONATION,
                         ContextRiskSignal.SAFE_ACCOUNT_REQUEST,
@@ -428,6 +436,17 @@ public class FdsAnalyzeService {
         }
 
         return count;
+    }
+
+    private boolean isUrgentFamilyAccidentSettlement(String purposeText) {
+        if (purposeText == null) return false;
+        String text = purposeText.replaceAll("\\s+", "");
+        boolean family = text.matches(".*(아들|아드님|딸|따님|자녀|가족|남편|아내|손자|손녀).*" );
+        boolean accident = text.contains("교통사고") || text.contains("차사고");
+        boolean settlement = text.contains("합의금") || text.contains("합의비");
+        boolean urgency = text.matches(".*(지금|빨리|급히|당장|즉시|바로|오늘안|오늘까지|긴급|서둘러).*" );
+        boolean negatedUrgency = text.matches(".*(급하지않|급한건아니|서두르지않|천천히|지금보내는게아니|지금은아니).*" );
+        return family && accident && settlement && urgency && !negatedUrgency;
     }
 
     private void addMatch(

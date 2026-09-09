@@ -11,6 +11,7 @@ public enum TransferStatus {
     FDS_CHECKING,
 
     NORMAL,
+    DELAY_CONFIRM,
 
     HIGH_RISK,
 

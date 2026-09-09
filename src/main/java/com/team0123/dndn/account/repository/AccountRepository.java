@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AccountRepository extends JpaRepository<Account, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select a from Account a where a.accountId = :id")
+    Optional<Account> findForUpdate(@org.springframework.data.repository.query.Param("id") Long id);
 
     /**
      * 사용자의 대표 계좌 조회

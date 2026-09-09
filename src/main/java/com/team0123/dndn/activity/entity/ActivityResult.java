@@ -24,8 +24,12 @@ import java.time.LocalDateTime;
 @Table(
         name = "activity_results",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_activity_results_user_activity_date",
-                columnNames = {"senior_user_id", "activity_id", "activity_date"}
+                name = "UK_ACTIVITY_RESULT_DAILY",
+                columnNames = {
+                        "senior_user_id",
+                        "activity_id",
+                        "activity_date"
+                }
         )
 )
 @Getter

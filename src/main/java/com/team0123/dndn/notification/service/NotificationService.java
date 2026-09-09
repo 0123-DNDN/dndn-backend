@@ -30,11 +30,19 @@ public class NotificationService {
             String title,
             String content
     ) {
+        return createNotification(userId, type, title, content, null);
+    }
+
+    @Transactional
+    public NotificationResponse createNotification(
+            Long userId, NotificationType type, String title, String content, Long transactionId
+    ) {
         Notification notification = Notification.builder()
                 .userId(userId)
                 .type(type)
                 .title(title)
                 .content(content)
+                .relatedTransactionId(transactionId)
                 .build();
 
         notificationRepository.save(notification);

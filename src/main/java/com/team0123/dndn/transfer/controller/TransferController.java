@@ -19,6 +19,41 @@ import java.util.List;
 public class TransferController {
 
     private final TransferService transferService;
+    private final com.team0123.dndn.user.repository.UserRepository userRepository;
+    private final com.team0123.dndn.account.repository.AccountRepository accountRepository;
+
+    @GetMapping("/guardian/pending")
+    public ResponseEntity<List<TransferResponse>> guardianPending(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(transferService.getGuardianPendingTransfers(userId));
+    }
+
+    @GetMapping("/{transactionId}/guardian-review")
+    public ResponseEntity<TransferResponse> guardianReview(
+            @AuthenticationPrincipal Long userId, @PathVariable Long transactionId
+    ) {
+        TransferResponse result = transferService.getGuardianTransfer(userId, transactionId);
+        accountRepository.findById(result.getSenderAccountId())
+                .flatMap(account -> userRepository.findById(account.getUserId()))
+                .ifPresent(user -> result.setSenderContact(user.getName(), user.getPhone()));
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/{transactionId}/delay-confirm")
+    public ResponseEntity<TransferResponse> confirmDelay(
+            @AuthenticationPrincipal Long userId, @PathVariable Long transactionId
+    ) {
+        return ResponseEntity.ok(transferService.confirmDelay(userId, transactionId));
+    }
+
+    @GetMapping("/pending")
+    public ResponseEntity<List<TransferResponse>> pending(@AuthenticationPrincipal Long userId) {
+        return ResponseEntity.ok(transferService.getTransactions(userId).stream()
+                .filter(t -> t.getStatus() == com.team0123.dndn.transfer.entity.TransferStatus.DELAY_CONFIRM
+                        || t.getStatus() == com.team0123.dndn.transfer.entity.TransferStatus.WAITING_GUARDIAN
+                        || t.getStatus() == com.team0123.dndn.transfer.entity.TransferStatus.GUARDIAN_APPROVED
+                        || t.getStatus() == com.team0123.dndn.transfer.entity.TransferStatus.FINAL_CONFIRMED)
+                .toList());
+    }
 
     /**
      * 송금 생성

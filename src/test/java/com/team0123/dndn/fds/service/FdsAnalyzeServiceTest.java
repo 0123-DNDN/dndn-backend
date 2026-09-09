@@ -60,6 +60,43 @@ class FdsAnalyzeServiceTest {
      * 기존처럼 LOW와 PROCEED를 반환해야 합니다.
      */
     @Test
+    void urgentFamilyAccidentSettlementOverridesLowScoreEvenWhenContextAnalysisFails() {
+        for (String purpose : List.of(
+                "딸이 교통사고 났다고 지금 피해자한테 합의금 빨리 내야해",
+                "아드님이 지금 교통사고를 냈습니다. 피해자가 많이 다쳐서 합의를 바로 보셔야 합니다. 피해자 쪽에서 합의금 500만 원을 요구하고 있습니다. 피해자 가족 계좌를 불러드릴게요.",
+                "따님이 교통 사고를 냈대요. 합의금 당장 보내야 해요"
+        )) {
+            FdsAnalyzeRequest request = new FdsAnalyzeRequest(
+                    purpose, List.of(), null, null, null, null, null, null);
+            when(transferContextService.analyze(purpose)).thenReturn(ContextAnalyzeResponse.failed());
+            when(riskScoringService.calculate(any())).thenReturn(scoreResponse(18));
+
+            FdsAnalyzeResponse response = fdsAnalyzeService.analyze(request);
+
+            assertEquals(RiskLevel.HIGH, response.riskLevel());
+            assertEquals(RecommendedAction.from(RiskLevel.HIGH), response.recommendedAction());
+            assertEquals(18, response.riskScore());
+            assertTrue(response.triggeredRules().contains(FdsDecisionRule.FAMILY_ACCIDENT_URGENT_SETTLEMENT));
+        }
+    }
+
+    @Test
+    void ordinaryFamilyTransfersAndNonUrgentSettlementsDoNotTriggerAccidentRule() {
+        for (String purpose : List.of(
+                "딸한테 지금 생활비 보내줘",
+                "교통사고 피해자에게 합의금을 보내요",
+                "딸 교통사고 합의금을 서류 확인 후 다음 주에 보내요",
+                "딸 교통사고 합의금인데 지금 급하지 않아 천천히 보낼 거야"
+        )) {
+            FdsAnalyzeRequest request = new FdsAnalyzeRequest(
+                    purpose, List.of(), null, null, null, null, null, null);
+            when(transferContextService.analyze(purpose)).thenReturn(ContextAnalyzeResponse.safe());
+            when(riskScoringService.calculate(any())).thenReturn(scoreResponse(18));
+            assertEquals(RiskLevel.CAUTION, fdsAnalyzeService.analyze(request).riskLevel());
+        }
+    }
+
+    @Test
     void safeContextWithoutAnswersReturnsLow() {
         // given
         FdsAnalyzeRequest request =

@@ -55,6 +55,41 @@ public class Transfer {
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
+    private java.time.Instant availableAt;
+
+    @Builder.Default
+    private boolean blocked = false;
+
+    private String riskLevel;
+    private Integer riskScore;
+    @ElementCollection
+    @Column(length = 1000)
+    @Builder.Default
+    private java.util.List<String> riskReasons = new java.util.ArrayList<>();
+
+    public void recordRisk(com.team0123.dndn.fds.dto.FdsAnalyzeResponse result) {
+        this.riskLevel = result.riskLevel().name();
+        this.riskScore = result.riskScore();
+        this.riskReasons = new java.util.ArrayList<>(result.reasons());
+    }
+
+    public void requireReview(boolean blocked) {
+        this.blocked = blocked;
+        this.availableAt = null;
+    }
+
+    public void startDelay() {
+        this.availableAt = java.time.Instant.now().plusSeconds(5 * 60 * 60);
+        this.status = TransferStatus.WAITING_GUARDIAN;
+    }
+
+    public boolean isFinalConfirmationAvailable() {
+        return !blocked && (status == TransferStatus.NORMAL
+                || status == TransferStatus.GUARDIAN_APPROVED
+                || (status == TransferStatus.WAITING_GUARDIAN && availableAt != null
+                && !java.time.Instant.now().isBefore(availableAt)));
+    }
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();

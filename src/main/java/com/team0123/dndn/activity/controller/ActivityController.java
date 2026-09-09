@@ -24,6 +24,13 @@ public class ActivityController {
 
     private final ActivityService activityService;
 
+    @GetMapping("/guardian/today")
+    public ResponseEntity<List<TodayActivityResponse>> getGuardianTodayActivities(
+            @AuthenticationPrincipal Long userId
+    ) {
+        return ResponseEntity.ok(activityService.getGuardianTodayActivities(userId));
+    }
+
     @GetMapping("/today")
     public ResponseEntity<List<TodayActivityResponse>> getTodayActivities(
             @AuthenticationPrincipal Long userId

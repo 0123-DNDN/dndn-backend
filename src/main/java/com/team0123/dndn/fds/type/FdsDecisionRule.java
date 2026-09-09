@@ -22,6 +22,7 @@ public enum FdsDecisionRule {
 
     // 기관 사칭 + 범죄·계좌 협박 + 긴급성
     AUTHORITY_THREAT,
+    FAMILY_ACCIDENT_URGENT_SETTLEMENT,
 
     // 제3자 송금 지시 + 긴급성 + 비밀 유지 요구
     SECRET_TRANSFER,

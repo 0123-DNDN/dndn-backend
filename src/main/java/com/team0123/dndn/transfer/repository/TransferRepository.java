@@ -12,6 +12,9 @@ import java.util.Optional;
 
 public interface TransferRepository
         extends JpaRepository<Transfer, Long> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Transfer t where t.transactionId = :id")
+    Optional<Transfer> findForUpdate(@Param("id") Long id);
 
     Optional<Transfer> findByTransactionId(Long transactionId);
 

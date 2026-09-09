@@ -1,5 +1,6 @@
 package com.team0123.dndn.family.service;
 
+import com.team0123.dndn.family.dto.FamilyRelationResponse;
 import com.team0123.dndn.family.entity.ConnectionCode;
 import com.team0123.dndn.family.entity.ConnectionCodeStatus;
 import com.team0123.dndn.family.entity.GuardianRelationship;
@@ -191,6 +192,14 @@ public class FamilyService {
         }
 
         throw new IllegalArgumentException("잘못된 사용자 역할입니다.");
+    }
+
+    public FamilyRelationResponse toResponse(GuardianRelationship relationship) {
+        return FamilyRelationResponse.from(
+                relationship,
+                getUser(relationship.getSeniorUserId()).getName(),
+                getUser(relationship.getGuardianUserId()).getName()
+        );
     }
 
     private User getUser(Long userId) {

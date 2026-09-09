@@ -674,6 +674,7 @@ public class TransferService {
             Transfer transfer,
             FdsAnalyzeResponse response
     ) {
+        transfer.recordRisk(response);
 
         RecommendedAction action =
                 response.recommendedAction();
@@ -707,11 +708,13 @@ public class TransferService {
                  * 역시 별도의 TransferStatus를 만들지 않습니다.
                  */
                 transfer.changeStatus(
-                        TransferStatus.NORMAL
+                        TransferStatus.DELAY_CONFIRM
                 );
+                transfer.requireReview(false);
                 break;
 
             case HOLD:
+                transfer.requireReview(response.hardRuleTriggered());
                 /*
                  * 고위험 송금입니다.
                  *
@@ -735,25 +738,17 @@ public class TransferService {
 
                 Long seniorUserId = senderAccount.getUserId();
 
-                Long guardianUserId =
-                        guardianRelationshipRepository
+                guardianRelationshipRepository
                                 .findBySeniorUserIdAndStatus(
                                         seniorUserId,
                                         com.team0123.dndn.family.entity.GuardianRelationshipStatus.ACTIVE
                                 )
-                                .orElseThrow(() ->
-                                        new IllegalArgumentException(
-                                                "연결된 보호자가 없습니다."
-                                        )
-                                )
-                                .getGuardianUserId();
-
-                notificationService.createNotification(
-                        guardianUserId,
+                                .ifPresent(relation -> notificationService.createNotification(
+                        relation.getGuardianUserId(),
                         NotificationType.HIGH_RISK_TRANSFER,
                         "송금 확인이 필요합니다.",
-                        "고위험 송금이 감지되었습니다. 가족 승인이 필요합니다."
-                );
+                        "고위험 송금이 감지되었습니다. 가족 확인이 필요합니다.", transfer.getTransactionId()
+                ));
 
                 break;
 
@@ -767,6 +762,39 @@ public class TransferService {
     /**
      * 송금 최종 확인
      */
+    @Transactional(readOnly = true)
+    public TransferResponse getGuardianTransfer(Long userId, Long transactionId) {
+        Transfer transfer = transferRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("송금 정보를 찾을 수 없습니다."));
+        validateGuardian(userId, transfer);
+        return toResponse(transfer);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TransferResponse> getGuardianPendingTransfers(Long userId) {
+        return guardianRelationshipRepository.findByGuardianUserIdAndStatus(
+                userId, com.team0123.dndn.family.entity.GuardianRelationshipStatus.ACTIVE)
+                .map(relation -> getTransactions(relation.getSeniorUserId()).stream()
+                        .filter(transfer -> transfer.getStatus() == TransferStatus.WAITING_GUARDIAN)
+                        .sorted(java.util.Comparator.comparing(TransferResponse::getCreatedAt).reversed())
+                        .toList())
+                .orElseGet(List::of);
+    }
+
+    public TransferResponse confirmDelay(Long userId, Long transactionId) {
+        Transfer transfer = getOwnedTransfer(userId, transactionId);
+        validateStatus(transfer, TransferStatus.DELAY_CONFIRM);
+        transfer.startDelay();
+        guardianRelationshipRepository.findBySeniorUserIdAndStatus(
+                userId, com.team0123.dndn.family.entity.GuardianRelationshipStatus.ACTIVE)
+                .ifPresent(relation -> notificationService.createNotification(
+                        relation.getGuardianUserId(), NotificationType.HIGH_RISK_TRANSFER,
+                        "송금 확인이 필요합니다.",
+                        "위험 송금을 5시간 보류했습니다. 보호자가 승인하면 대기를 해제할 수 있습니다. 거래 번호: "
+                                + transactionId, transactionId));
+        return toResponse(transfer);
+    }
+
     public TransferResponse finalConfirm(
             Long userId,
             Long transactionId
@@ -775,11 +803,10 @@ public class TransferService {
         Transfer transfer =
                 getOwnedTransfer(userId, transactionId);
 
-        if (transfer.getStatus() != TransferStatus.NORMAL
-                && transfer.getStatus() != TransferStatus.GUARDIAN_APPROVED) {
+        if (!transfer.isFinalConfirmationAvailable()) {
 
             throw new IllegalArgumentException(
-                    "현재 상태에서는 해당 작업을 수행할 수 없습니다."
+                    "아직 송금할 수 없습니다. 대기 시간이 지나거나 보호자 승인이 필요합니다."
             );
         }
 
@@ -806,10 +833,13 @@ public class TransferService {
                 transfer,
                 TransferStatus.FINAL_CONFIRMED
         );
+        if (transfer.isBlocked()) {
+            throw new IllegalArgumentException("차단된 거래는 송금할 수 없습니다.");
+        }
 
         Account senderAccount =
                 accountRepository
-                        .findById(transfer.getSenderAccountId())
+                        .findForUpdate(transfer.getSenderAccountId())
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
                                         "송금 계좌를 찾을 수 없습니다."
@@ -818,6 +848,9 @@ public class TransferService {
 
         Long balanceBefore =
                 senderAccount.getBalance();
+        if (senderAccount.getStatus() != com.team0123.dndn.account.entity.AccountStatus.ACTIVE) {
+            throw new IllegalArgumentException("사용할 수 없는 출금 계좌입니다.");
+        }
 
         if (balanceBefore < transfer.getAmount()) {
             throw new IllegalArgumentException(
@@ -848,7 +881,7 @@ public class TransferService {
             Long transactionId
     ) {
 
-        Transfer transfer = transferRepository.findById(transactionId)
+        Transfer transfer = transferRepository.findForUpdate(transactionId)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "송금 정보를 찾을 수 없습니다."
@@ -864,6 +897,9 @@ public class TransferService {
                 guardianUserId,
                 transfer
         );
+        if (transfer.isBlocked()) {
+            throw new IllegalArgumentException("차단된 거래는 보호자도 승인할 수 없습니다.");
+        }
 
         transfer.changeStatus(
                 TransferStatus.GUARDIAN_APPROVED
@@ -901,7 +937,7 @@ public class TransferService {
             Long transactionId
     ) {
 
-        Transfer transfer = transferRepository.findById(transactionId)
+        Transfer transfer = transferRepository.findForUpdate(transactionId)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "송금 정보를 찾을 수 없습니다."
@@ -1017,6 +1053,7 @@ public class TransferService {
                         seniorUserId,
                         guardianUserId
                 )
+                .filter(relation -> relation.getStatus() == com.team0123.dndn.family.entity.GuardianRelationshipStatus.ACTIVE)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "해당 송금에 대한 보호자 권한이 없습니다."
@@ -1033,7 +1070,7 @@ public class TransferService {
     ) {
 
         Transfer transfer = transferRepository
-                .findByTransactionId(transactionId)
+                .findForUpdate(transactionId)
                 .orElseThrow(() ->
                         new IllegalArgumentException(
                                 "존재하지 않는 송금입니다."

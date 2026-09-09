@@ -38,6 +38,18 @@ public class TransferResponse {
     private LocalDateTime createdAt;
 
     private LocalDateTime completedAt;
+    private java.time.Instant availableAt;
+    private boolean finalConfirmationAvailable;
+    private boolean blocked;
+    private String senderName;
+    private String senderPhone;
+    public void setSenderContact(String name, String phone) {
+        this.senderName = name;
+        this.senderPhone = phone;
+    }
+    private String riskLevel;
+    private Integer riskScore;
+    private java.util.List<String> riskReasons;
 
     public static TransferResponse from(Transfer transfer, String senderAccountNumber) {
         return TransferResponse.builder()
@@ -55,6 +67,12 @@ public class TransferResponse {
                 .status(transfer.getStatus())
                 .createdAt(transfer.getCreatedAt())
                 .completedAt(transfer.getCompletedAt())
+                .availableAt(transfer.getAvailableAt())
+                .finalConfirmationAvailable(transfer.isFinalConfirmationAvailable())
+                .blocked(transfer.isBlocked())
+                .riskLevel(transfer.getRiskLevel())
+                .riskScore(transfer.getRiskScore())
+                .riskReasons(java.util.List.copyOf(transfer.getRiskReasons()))
                 .build();
     }
 }

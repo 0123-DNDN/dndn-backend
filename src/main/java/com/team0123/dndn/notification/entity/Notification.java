@@ -30,6 +30,7 @@ public class Notification {
 
     @Column(name = "content", nullable = false, length = 255)
     private String content;
+    private Long relatedTransactionId;
 
     @Builder.Default
     @Column(name = "is_read", nullable = false)

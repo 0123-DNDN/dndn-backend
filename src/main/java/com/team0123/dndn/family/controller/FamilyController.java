@@ -49,7 +49,7 @@ public class FamilyController {
                 );
 
         return ResponseEntity.ok(
-                FamilyRelationResponse.from(relationship)
+                familyService.toResponse(relationship)
         );
     }
 
@@ -64,7 +64,7 @@ public class FamilyController {
                 familyService.getRelation(userId);
 
         return ResponseEntity.ok(
-                FamilyRelationResponse.from(relationship)
+                familyService.toResponse(relationship)
         );
     }
 }

@@ -11,6 +11,8 @@ import com.team0123.dndn.activity.repository.ActivityResultRepository;
 import com.team0123.dndn.interaction.entity.InteractionSession;
 import com.team0123.dndn.interaction.repository.InteractionSessionRepository;
 import com.team0123.dndn.user.entity.Role;
+import com.team0123.dndn.family.repository.GuardianRelationshipRepository;
+import com.team0123.dndn.family.entity.GuardianRelationshipStatus;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,20 @@ public class ActivityService {
     private final ActivityResultRepository activityResultRepository;
     private final UserRepository userRepository;
     private final InteractionSessionRepository interactionSessionRepository;
+    private final GuardianRelationshipRepository guardianRelationshipRepository;
+
+    public List<TodayActivityResponse> getGuardianTodayActivities(Long userId) {
+        User guardian = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        if (guardian.getRole() != Role.GUARDIAN) {
+            throw new IllegalArgumentException("보호자만 조회할 수 있습니다.");
+        }
+        Long seniorUserId = guardianRelationshipRepository
+                .findByGuardianUserIdAndStatus(userId, GuardianRelationshipStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("연결된 시니어가 없습니다."))
+                .getSeniorUserId();
+        return getTodayActivities(seniorUserId);
+    }
 
     public List<TodayActivityResponse> getTodayActivities(Long userId) {
         requireSenior(userId);

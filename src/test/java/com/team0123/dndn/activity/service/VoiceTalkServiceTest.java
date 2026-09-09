@@ -10,6 +10,7 @@ import com.team0123.dndn.activity.entity.ActivityType;
 import com.team0123.dndn.activity.repository.ActivityRepository;
 import com.team0123.dndn.activity.support.VoiceTalkOpeningQuestions;
 import com.team0123.dndn.ai.client.GeminiDailyTalkClient;
+import com.team0123.dndn.ai.dto.AiVoiceConditionRequest;
 import com.team0123.dndn.interaction.entity.InputType;
 import com.team0123.dndn.interaction.entity.InteractionMessage;
 import com.team0123.dndn.interaction.entity.InteractionSession;
@@ -19,6 +20,8 @@ import com.team0123.dndn.interaction.repository.InteractionSessionRepository;
 import com.team0123.dndn.user.entity.Role;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
+import com.team0123.dndn.voice.entity.VoiceConditionRecord;
+import com.team0123.dndn.voice.repository.VoiceConditionRecordRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -55,6 +59,9 @@ class VoiceTalkServiceTest {
     private InteractionMessageRepository interactionMessageRepository;
 
     @Mock
+    private VoiceConditionRecordRepository voiceConditionRecordRepository;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
@@ -79,6 +86,7 @@ class VoiceTalkServiceTest {
         voiceTalkService = new VoiceTalkService(
                 interactionSessionRepository,
                 interactionMessageRepository,
+                voiceConditionRecordRepository,
                 userRepository,
                 activityRepository,
                 activityService,
@@ -174,6 +182,60 @@ class VoiceTalkServiceTest {
         assertEquals(SenderType.ASSISTANT, savedMessages.get(1).getSenderType());
         assertEquals("질문 2", savedMessages.get(1).getContent());
         verify(activityService, never()).saveResult(anyLong(), anyLong(), any());
+        verify(voiceConditionRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void answerStoresVoiceConditionForSavedUserMessage() {
+        mockSenior(1L);
+        when(interactionSessionRepository.findById(10L))
+                .thenReturn(Optional.of(activeSession(10L, 1L)));
+        when(openingQuestions.contains("질문 1")).thenReturn(true);
+        when(interactionMessageRepository
+                .findAllBySessionIdOrderByCreatedAtAscMessageIdAsc(10L))
+                .thenReturn(conversationAfterAnswer(1));
+        when(geminiDailyTalkClient.generateNextQuestion(any()))
+                .thenReturn(Optional.of("질문 2"));
+        when(interactionMessageRepository.save(any(InteractionMessage.class)))
+                .thenAnswer(invocation -> {
+                    InteractionMessage message = invocation.getArgument(0);
+                    if (message.getSenderType() == SenderType.USER) {
+                        return InteractionMessage.builder()
+                                .messageId(100L)
+                                .sessionId(message.getSessionId())
+                                .senderType(message.getSenderType())
+                                .inputType(message.getInputType())
+                                .content(message.getContent())
+                                .build();
+                    }
+                    return message;
+                });
+        when(voiceConditionRecordRepository.save(any(VoiceConditionRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        voiceTalkService.answer(
+                1L,
+                10L,
+                new VoiceTalkAnswerRequest(
+                        "음성 답변",
+                        new AiVoiceConditionRequest(
+                                4000L,
+                                new BigDecimal("3.25"),
+                                1200L,
+                                2
+                        )
+                )
+        );
+
+        ArgumentCaptor<VoiceConditionRecord> conditionCaptor =
+                ArgumentCaptor.forClass(VoiceConditionRecord.class);
+        verify(voiceConditionRecordRepository).save(conditionCaptor.capture());
+        VoiceConditionRecord condition = conditionCaptor.getValue();
+        assertEquals(100L, condition.getMessageId());
+        assertEquals(4000L, condition.getSpeechDurationMs());
+        assertEquals(new BigDecimal("3.25"), condition.getSpeechRate());
+        assertEquals(1200L, condition.getAvgPauseDurationMs());
+        assertEquals(2, condition.getLongPauseCount());
     }
 
     @Test

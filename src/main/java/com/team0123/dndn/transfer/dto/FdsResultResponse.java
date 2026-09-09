@@ -1,6 +1,7 @@
 package com.team0123.dndn.transfer.dto;
 
 import com.team0123.dndn.fds.dto.FdsAnalyzeResponse;
+import com.team0123.dndn.fds.type.FdsDecisionRule;
 import com.team0123.dndn.fds.type.RecommendedAction;
 import com.team0123.dndn.fds.type.RiskLevel;
 import lombok.Builder;
@@ -20,12 +21,24 @@ public class FdsResultResponse {
 
     private List<String> reasons;
 
+    private boolean hardRuleTriggered;
+
+    private boolean combinationRuleTriggered;
+
+    private List<FdsDecisionRule> triggeredRules;
+
+    private boolean contextAnalysisSucceeded;
+
     public static FdsResultResponse from(FdsAnalyzeResponse response) {
         return FdsResultResponse.builder()
                 .recommendedAction(response.recommendedAction())
                 .riskLevel(response.riskLevel())
                 .riskScore(response.riskScore())
                 .reasons(response.reasons())
+                .hardRuleTriggered(response.hardRuleTriggered())
+                .combinationRuleTriggered(response.combinationRuleTriggered())
+                .triggeredRules(response.triggeredRules())
+                .contextAnalysisSucceeded(response.contextAnalysisSucceeded())
                 .build();
     }
 }

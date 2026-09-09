@@ -1,2 +1,1 @@
-# dndn-backend
-DNDN 백엔드
+# practice-backend

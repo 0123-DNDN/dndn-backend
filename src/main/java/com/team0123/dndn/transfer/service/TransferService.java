@@ -25,6 +25,8 @@ import com.team0123.dndn.transfer.dto.TransferResponse;
 import com.team0123.dndn.transfer.entity.Transfer;
 import com.team0123.dndn.transfer.entity.TransferStatus;
 import com.team0123.dndn.transfer.repository.TransferRepository;
+import com.team0123.dndn.notification.entity.NotificationType;
+import com.team0123.dndn.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,7 @@ public class TransferService {
     private final FdsRiskAnalysisRepository fdsRiskAnalysisRepository;
     private final RecipientAliasRepository recipientAliasRepository;
     private final GuardianRelationshipRepository guardianRelationshipRepository;
+    private final NotificationService notificationService;
 
     /**
      * 송금 요청을 생성합니다.
@@ -714,6 +717,37 @@ public class TransferService {
                 transfer.changeStatus(
                         TransferStatus.WAITING_GUARDIAN
                 );
+
+                Account senderAccount = accountRepository
+                        .findById(transfer.getSenderAccountId())
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "송금 계좌를 찾을 수 없습니다."
+                                )
+                        );
+
+                Long seniorUserId = senderAccount.getUserId();
+
+                Long guardianUserId =
+                        guardianRelationshipRepository
+                                .findBySeniorUserIdAndStatus(
+                                        seniorUserId,
+                                        com.team0123.dndn.family.entity.GuardianRelationshipStatus.ACTIVE
+                                )
+                                .orElseThrow(() ->
+                                        new IllegalArgumentException(
+                                                "연결된 보호자가 없습니다."
+                                        )
+                                )
+                                .getGuardianUserId();
+
+                notificationService.createNotification(
+                        guardianUserId,
+                        NotificationType.HIGH_RISK_TRANSFER,
+                        "송금 확인이 필요합니다.",
+                        "고위험 송금이 감지되었습니다. 가족 승인이 필요합니다."
+                );
+
                 break;
 
             default:
@@ -828,6 +862,23 @@ public class TransferService {
                 TransferStatus.GUARDIAN_APPROVED
         );
 
+        Account senderAccount = accountRepository
+                .findById(transfer.getSenderAccountId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "송금 계좌를 찾을 수 없습니다."
+                        )
+                );
+
+        Long seniorUserId = senderAccount.getUserId();
+
+        notificationService.createNotification(
+                seniorUserId,
+                NotificationType.GUARDIAN_APPROVED,
+                "가족 승인이 완료되었습니다.",
+                "보호자가 송금을 승인했습니다. 송금을 계속 진행할 수 있습니다."
+        );
+
         return toResponse(transfer);
     }
 
@@ -861,6 +912,23 @@ public class TransferService {
         );
 
         transfer.cancel();
+
+        Account senderAccount = accountRepository
+                .findById(transfer.getSenderAccountId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "송금 계좌를 찾을 수 없습니다."
+                        )
+                );
+
+        Long seniorUserId = senderAccount.getUserId();
+
+        notificationService.createNotification(
+                seniorUserId,
+                NotificationType.GUARDIAN_REJECTED,
+                "송금이 취소되었습니다.",
+                "가족이 송금을 승인하지 않아 송금이 취소되었습니다."
+        );
 
         return toResponse(transfer);
     }

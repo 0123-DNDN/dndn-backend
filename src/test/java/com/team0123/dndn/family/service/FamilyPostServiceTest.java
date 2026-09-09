@@ -14,6 +14,7 @@ import com.team0123.dndn.family.entity.GuardianRelationship;
 import com.team0123.dndn.family.entity.GuardianRelationshipStatus;
 import com.team0123.dndn.family.repository.FamilyPostRepository;
 import com.team0123.dndn.family.repository.GuardianRelationshipRepository;
+import com.team0123.dndn.notification.service.NotificationService;
 import com.team0123.dndn.user.entity.Role;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
@@ -67,6 +68,9 @@ class FamilyPostServiceTest {
 
     private FamilyPostService familyPostService;
 
+    @Mock
+    private NotificationService notificationService;
+
     @BeforeEach
     void setUp() {
         familyPostService = new FamilyPostService(
@@ -75,7 +79,8 @@ class FamilyPostServiceTest {
                 activityRepository,
                 activityResultRepository,
                 userRepository,
-                familyImageStorage
+                familyImageStorage,
+                notificationService
         );
     }
 

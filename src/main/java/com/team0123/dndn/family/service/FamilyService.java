@@ -9,6 +9,8 @@ import com.team0123.dndn.family.repository.GuardianRelationshipRepository;
 import com.team0123.dndn.user.entity.Role;
 import com.team0123.dndn.user.entity.User;
 import com.team0123.dndn.user.repository.UserRepository;
+import com.team0123.dndn.notification.entity.NotificationType;
+import com.team0123.dndn.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +26,7 @@ public class FamilyService {
     private final ConnectionCodeRepository connectionCodeRepository;
     private final GuardianRelationshipRepository guardianRelationshipRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -136,6 +139,22 @@ public class FamilyService {
 
         // 사용된 코드 처리
         connectionCode.use(guardianUserId);
+
+        // 시니어에게 알림
+        notificationService.createNotification(
+                seniorUserId,
+                NotificationType.FAMILY_CONNECTED,
+                "가족 연결 완료",
+                "보호자와 가족 연결이 완료되었습니다."
+        );
+
+        // 보호자에게 알림
+        notificationService.createNotification(
+                guardianUserId,
+                NotificationType.FAMILY_CONNECTED,
+                "가족 연결 완료",
+                "시니어와 가족 연결이 완료되었습니다."
+        );
 
         return savedRelationship;
     }

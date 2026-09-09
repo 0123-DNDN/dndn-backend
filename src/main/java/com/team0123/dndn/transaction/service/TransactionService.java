@@ -75,6 +75,14 @@ public class TransactionService {
 
     private TransactionResponse toResponse(Transfer transfer) {
 
+        Account senderAccount = accountRepository
+                .findById(transfer.getSenderAccountId())
+                .orElseThrow(() ->
+                        new IllegalArgumentException(
+                                "송금 계좌를 찾을 수 없습니다."
+                        )
+                );
+
         RiskLevel riskLevel =
                 fdsRiskAnalysisRepository
                         .findTopByTransactionIdOrderByAnalyzedAtDesc(
@@ -85,6 +93,7 @@ public class TransactionService {
 
         return TransactionResponse.from(
                 transfer,
+                senderAccount.getAccountNumber(),
                 riskLevel
         );
     }

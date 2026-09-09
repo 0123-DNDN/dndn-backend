@@ -1,6 +1,7 @@
 package com.team0123.dndn.user.service;
 
 import com.team0123.dndn.auth.JwtTokenProvider;
+import com.team0123.dndn.auth.service.PhoneVerificationService;
 import com.team0123.dndn.user.dto.UserLoginRequest;
 import com.team0123.dndn.user.dto.UserLoginResponse;
 import com.team0123.dndn.user.dto.UserResponse;
@@ -21,20 +22,29 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PhoneVerificationService phoneVerificationService;
 
     // 회원가입
     @Transactional
     public void signup(UserSignupRequest request) {
 
-        // 1. 전화번호 중복 확인
+        // 1. 전화번호 인증 여부 확인
+        if (!phoneVerificationService.isVerified(request.getPhone())) {
+            throw new IllegalArgumentException(
+                    "전화번호 인증이 필요합니다."
+            );
+        }
+
+        // 2. 전화번호 중복 확인
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new IllegalArgumentException("이미 가입된 전화번호입니다.");
         }
 
-        // 2. 비밀번호 암호화
-        String encodedPassword = passwordEncoder.encode(request.getPassword());
+        // 3. 비밀번호 암호화
+        String encodedPassword =
+                passwordEncoder.encode(request.getPassword());
 
-        // 3. User 엔티티 생성
+        // 4. User 엔티티 생성
         User user = User.builder()
                 .name(request.getName())
                 .password(encodedPassword)
@@ -43,7 +53,7 @@ public class UserService {
                 .birthDate(request.getBirthDate())
                 .build();
 
-        // 4. 회원 저장
+        // 5. 회원 저장
         userRepository.save(user);
     }
 
